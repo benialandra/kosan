@@ -1,0 +1,421 @@
+<script>
+  var appData = null; var userRole = null; 
+  var chartJob, chartTime, chartTrnd;
+  var autoRefreshTimer = null; 
+
+  var limitKamar = 8;
+  var searchKamarQuery = "";
+  var adminCurrentPage = 1;
+  var adminRowsPerPage = 10;
+
+  function formatRibuan(val) {
+    if (!val) return '';
+    var angka = val.toString().replace(/[^,\d]/g, '');
+    return angka.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+
+  function loginAdmin() {
+    Swal.fire({ title: 'Akses Admin', input: 'password', inputPlaceholder: 'PIN (12345)', confirmButtonColor: '#4f46e5', showCancelButton: true, customClass: { popup: 'rounded-3xl dark:bg-slate-800 dark:text-white' }
+    }).then(function(res) {
+      if (res.value === '12345') {
+        userRole = 'admin'; document.getElementById('role-badge').innerText = 'ADMINISTRATOR'; document.getElementById('role-badge').className = 'font-black text-xs px-4 py-1.5 rounded-full uppercase tracking-widest bg-indigo-500 text-white shadow-md';
+        document.getElementById('sidebar').classList.remove('sidebar-closed'); document.getElementById('btn-toggle-sidebar').classList.remove('hidden-view');
+        enterApp('dashboard');
+      } else if (res.value) { Swal.fire({icon: 'error', title: 'PIN Salah!', customClass: { popup: 'dark:bg-slate-800' }}); }
+    });
+  }
+
+  function loginPenyewa() {
+    userRole = 'penyewa'; document.getElementById('role-badge').innerText = 'PENYEWA / TAMU'; document.getElementById('role-badge').className = 'font-black text-xs px-4 py-1.5 rounded-full uppercase tracking-widest bg-emerald-500 text-white shadow-md';
+    document.getElementById('sidebar').classList.add('sidebar-closed'); document.getElementById('btn-toggle-sidebar').classList.add('hidden-view');
+    enterApp('kamar');
+  }
+
+  function enterApp(view) { document.getElementById('view-auth').classList.add('hidden-view'); document.getElementById('app-wrapper').classList.remove('hidden-view'); showView(view); }
+  function logout() { userRole = null; appData = null; if(autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; } document.getElementById('app-wrapper').classList.add('hidden-view'); document.getElementById('view-auth').classList.remove('hidden-view'); document.getElementById('sidebar').classList.add('sidebar-closed'); Swal.fire({ icon: 'success', title: 'Berhasil Keluar', timer: 1000, showConfirmButton: false, customClass: { popup: 'rounded-3xl dark:bg-slate-800 dark:text-white' } }); }
+  function toggleSidebar() { document.getElementById('sidebar').classList.toggle('sidebar-closed'); }
+
+  function showView(viewName) {
+    document.querySelectorAll('.content-view').forEach(function(v){ v.classList.add('hidden-view'); });
+    var target = document.getElementById('view-' + viewName); if(target) target.classList.remove('hidden-view');
+    document.querySelectorAll('.nav-btn').forEach(function(btn) { btn.classList.remove('bg-indigo-50', 'text-indigo-600', 'dark:bg-indigo-500', 'dark:text-white'); btn.classList.add('text-slate-600', 'dark:text-slate-400'); });
+    var actBtn = document.getElementById('btn-' + viewName); if(actBtn) { actBtn.classList.remove('text-slate-600', 'dark:text-slate-400'); actBtn.classList.add('bg-indigo-50', 'text-indigo-600', 'dark:bg-indigo-500', 'dark:text-white'); }
+    if (!appData) loadDataServer(false); else renderUI();
+  }
+
+  function loadDataServer(isSilent) {
+    if (!isSilent) Swal.fire({ title: 'Memuat Data...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); }, customClass: { popup: 'rounded-[2rem] dark:bg-slate-800 dark:text-white' } });
+    google.script.run
+      .withSuccessHandler(function(data) {
+        try {
+          appData = data; renderUI(); if (!isSilent) Swal.close();
+          if (!autoRefreshTimer) { autoRefreshTimer = setInterval(function() { if (!Swal.isVisible()) { loadDataServer(true); } }, 15000); }
+        } catch(e) { if(!isSilent) Swal.fire({icon:'error', title:'Error UI', text:e.message, customClass:{popup:'dark:bg-slate-800'}}); }
+      })
+      .withFailureHandler(function(err) { if(!isSilent) Swal.fire({icon:'error', title:'Error Server', text:err.message, customClass:{popup:'dark:bg-slate-800'}}); })
+      .getAppSummary();
+  }
+
+  function renderUI() {
+    if (!appData) return;
+    renderDashboard(); renderKamarGallery(); renderTabelAdmin();
+  }
+
+  function renderDashboard() {
+    if (userRole !== 'admin' || !appData.dash) return;
+    var isDark = document.documentElement.classList.contains('dark'); var textColor = isDark ? '#94a3b8' : '#64748b'; var gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+    
+    document.getElementById('c-total').innerText = appData.dash.total; document.getElementById('c-kosong').innerText = appData.dash.kosong; document.getElementById('c-paid').innerText = appData.dash.paid;
+
+    var pSec = document.getElementById('pending-section'); var pCon = document.getElementById('pendingContainer');
+    if (appData.dash.pendingTx && appData.dash.pendingTx.length > 0) {
+      if(pSec) pSec.classList.remove('hidden-view'); var pHtml = '';
+      appData.dash.pendingTx.forEach(function(p) {
+        var isCash = (p.bukti === 'BAYAR CASH');
+        var buktiBtn = isCash ? '<div class="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center text-2xl text-emerald-600 dark:text-emerald-400" title="Pembayaran Tunai (Cash)">💵</div>' : '<button onclick="showFotoBukti(\'' + p.bukti + '\')" class="w-12 h-12 bg-amber-50 dark:bg-amber-900/40 rounded-xl flex items-center justify-center text-xl hover:scale-110 hover:bg-amber-100 transition-all text-amber-600 dark:text-amber-400" title="Lihat Bukti Transfer">🖼️</button>';
+        pHtml += '<div class="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-amber-100 dark:border-amber-900/30 shadow-sm"><div class="flex justify-between items-start"><div><span class="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Menunggu</span><h4 class="text-xl font-black mt-1 dark:text-white">Kamar ' + p.no + '</h4></div>' + buktiBtn + '</div><p class="text-sm text-slate-500 dark:text-slate-400 mt-2">Nominal: Rp ' + Number(p.nom).toLocaleString('id-ID') + '</p>';
+        if (isCash) pHtml += '<p class="text-xs text-emerald-500 font-bold mt-1">Metode: CASH / TUNAI</p>';
+        pHtml += '<div class="flex gap-2 mt-4"><button onclick="actionApprove(' + p.row + ', \''+ p.no +'\')" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 rounded-xl text-xs transition-colors shadow-sm">Setujui</button><button onclick="actionReject(' + p.row + ', \''+ p.no +'\')" class="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-600 font-bold py-2 rounded-xl text-xs transition-colors">Tolak</button></div></div>';
+      });
+      if(pCon) pCon.innerHTML = pHtml;
+    } else { if(pSec) pSec.classList.add('hidden-view'); }
+
+    var uSec = document.getElementById('unpaid-section'); var uCon = document.getElementById('unpaidContainer');
+    if (appData.dash.awaitingPayment && appData.dash.awaitingPayment.length > 0) {
+      if(uSec) uSec.classList.remove('hidden-view'); var uHtml = '';
+      appData.dash.awaitingPayment.forEach(function(u) {
+        uHtml += '<div class="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-rose-100 dark:border-rose-900/30 shadow-sm"><div class="flex justify-between items-start"><div><span class="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Belum Bayar</span><h4 class="text-xl font-black mt-1 dark:text-white">Kamar ' + u.no + '</h4></div><div class="text-2xl animate-pulse">⏳</div></div><p class="text-sm text-slate-500 dark:text-slate-400 mt-2">Penyewa: <span class="font-bold text-slate-700 dark:text-slate-200">' + u.nama + '</span></p><p class="text-sm text-slate-500 dark:text-slate-400">Tagihan: Rp ' + formatRibuan(u.harga) + '</p><div class="flex gap-2 mt-4"><button onclick="actionBayar(\'' + u.no + '\', \'' + u.harga + '\')" class="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 rounded-xl text-xs transition-colors shadow-sm">Bayarkan Cash</button><button onclick="actionKosongkan(\'' + u.no + '\')" class="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-600 font-bold py-2 rounded-xl text-xs transition-colors">Batalkan</button></div></div>';
+      });
+      if(uCon) uCon.innerHTML = uHtml;
+    } else { if(uSec) uSec.classList.add('hidden-view'); }
+
+    var tbHtml = '';
+    appData.dash.tabel.forEach(function(t) {
+      
+      // --- PERBAIKAN LOGIKA NOMOR WHATSAPP ---
+      var waHp = String(t.hp).replace(/\D/g, ''); // Bersihkan dari spasi, strip, atau tanda +
+      if (waHp.startsWith('0')) {
+         waHp = '62' + waHp.substring(1); // Ubah 0 jadi 62
+      } else if (waHp.startsWith('8')) {
+         waHp = '62' + waHp; // Jika 0-nya hilang oleh Sheet, tambahkan 62 di depan 8
+      }
+      // Jika sudah pakai 62 dari awal, biarkan saja.
+
+      var hpLink = (t.hp && t.hp !== '-') 
+        ? '<a href="https://wa.me/' + waHp + '" target="_blank" class="text-emerald-500 hover:text-emerald-600 hover:underline font-bold flex items-center gap-1" title="Chat WhatsApp">💬 ' + t.hp + '</a>' 
+        : '<span class="text-slate-400">-</span>';
+
+      tbHtml += '<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">';
+      tbHtml += '<td class="p-5 font-black text-indigo-500">K-' + t.no + '</td>';
+      tbHtml += '<td class="p-5 font-bold uppercase dark:text-slate-200">' + t.nama + '</td>';
+      tbHtml += '<td class="p-5 font-mono">' + hpLink + '</td>';
+      tbHtml += '<td class="p-5"><span class="bg-slate-100 dark:bg-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider dark:text-slate-300">' + t.job + '</span></td>';
+      tbHtml += '<td class="p-5 font-mono text-slate-500">' + t.tgl + '</td>';
+      tbHtml += '</tr>';
+    });
+    
+    var elTblDash = document.getElementById('tabelPenyewa'); 
+    if (elTblDash) elTblDash.innerHTML = tbHtml || '<tr><td colspan="5" class="p-6 text-center text-slate-400">Belum ada penyewa</td></tr>';
+
+    try {
+      if (typeof Chart !== 'undefined') {
+        var animConfig = { duration: 1500, easing: 'easeOutQuart' };
+        if(chartJob) chartJob.destroy(); chartJob = new Chart(document.getElementById('chartPekerjaan'), { type:'doughnut', data:{labels:['Mhs','Kerja'], datasets:[{data:appData.dash.donutJob, backgroundColor:['#6366f1','#10b981'], borderWidth:0, hoverOffset:5}]}, options:{responsive:true, maintainAspectRatio:false, animation: animConfig, plugins:{legend:{labels:{color:textColor}}}, cutout: '40%'} });
+        if(chartTime) chartTime.destroy(); chartTime = new Chart(document.getElementById('chartSewa'), { type:'doughnut', data:{labels:['<20hr','Aman'], datasets:[{data:appData.dash.donutTime, backgroundColor:['#f43f5e','#10b981'], borderWidth:0, hoverOffset:5}]}, options:{responsive:true, maintainAspectRatio:false, animation: animConfig, plugins:{legend:{labels:{color:textColor}}}, cutout: '40%'} });
+        var ctxTrend = document.getElementById('chartTrend').getContext('2d');
+        var gradTerisi = ctxTrend.createLinearGradient(0,0,0,300); gradTerisi.addColorStop(0, isDark?'rgba(99,102,241,0.4)':'rgba(99,102,241,0.2)'); gradTerisi.addColorStop(1, 'rgba(99,102,241,0)');
+        var gradKosong = ctxTrend.createLinearGradient(0,0,0,300); gradKosong.addColorStop(0, isDark?'rgba(16,185,129,0.4)':'rgba(16,185,129,0.2)'); gradKosong.addColorStop(1, 'rgba(16,185,129,0)');
+        if(chartTrnd) chartTrnd.destroy(); chartTrnd = new Chart(document.getElementById('chartTrend'), { type:'line', data:{labels:appData.dash.trend.labels, datasets:[{label:'Terisi', data:appData.dash.trend.terisi, borderColor:'#6366f1', backgroundColor:gradTerisi, borderWidth:3, fill:true, tension:0.4, pointBackgroundColor:isDark?'#1e293b':'#fff', pointBorderColor:'#6366f1', pointBorderWidth:2, pointRadius:4, pointHoverRadius:6}, {label:'Kosong', data:appData.dash.trend.kosong, borderColor:'#10b981', backgroundColor:gradKosong, borderWidth:3, fill:true, tension:0.4, pointBackgroundColor:isDark?'#1e293b':'#fff', pointBorderColor:'#10b981', pointBorderWidth:2, pointRadius:4, pointHoverRadius:6}]}, options:{responsive:true, maintainAspectRatio:false, animation: animConfig, interaction:{mode:'index', intersect:false}, plugins:{legend:{display:false}}, scales:{x:{ticks:{color:textColor}, grid:{display:false}}, y:{beginAtZero:true, ticks:{color:textColor, stepSize:1}, grid:{color:gridColor, borderDash:[5,5], drawBorder:false}}}} });
+      }
+    } catch(e) { console.log('Chart fail:', e); }
+  }
+
+  function renderKamarGallery() {
+    if(!appData) return;
+    var filteredKamar = appData.kamarList.filter(function(k) {
+      var q = searchKamarQuery.toLowerCase();
+      if (q) { return String(k.no).toLowerCase().includes(q) || String(k.fasilitas).toLowerCase().includes(q) || String(k.harga).includes(q) || String(k.status).toLowerCase().includes(q); }
+      return true;
+    });
+
+    var gHtml = ''; var paginated = filteredKamar.slice(0, limitKamar);
+    paginated.forEach(function(k) {
+      var bgB = 'bg-emerald-500';
+      var txtStatus = k.status;
+      
+      if (k.status === 'TERISI') bgB = 'bg-rose-500';
+      if (k.status === 'PENDING') bgB = 'bg-amber-500';
+
+      var textPenghuni = 'Tersedia';
+      if (k.status !== 'KOSONG') {
+         var maskedName = k.penghuni ? k.penghuni.charAt(0) + '***' : '***';
+         textPenghuni = (k.status === 'PENDING' ? 'Booking: ' : 'Terisi: ') + maskedName;
+      }
+      
+      gHtml += '<div onclick="showDetailKamar(\'' + k.no + '\')" class="group bg-white dark:bg-slate-800 rounded-[2rem] overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 cursor-pointer hover:-translate-y-2 hover:shadow-xl transition-all duration-300">';
+      gHtml += '<div class="relative h-56 bg-slate-200 dark:bg-slate-700"><img src="' + k.gambar + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"><div class="absolute top-4 right-4 ' + bgB + ' text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase shadow-md">' + txtStatus + '</div></div>';
+      gHtml += '<div class="p-6"><div class="flex justify-between items-end mb-1"><h3 class="text-2xl font-black dark:text-white">K-' + k.no + '</h3><p class="text-sm font-bold text-indigo-600 dark:text-indigo-400">Rp ' + Number(k.harga).toLocaleString('id-ID') + '</p></div><p class="text-xs font-bold text-slate-400 uppercase truncate">' + textPenghuni + '</p></div></div>';
+    });
+    
+    var galEl = document.getElementById('kamarGallery'); if(galEl) galEl.innerHTML = gHtml || '<div class="col-span-full py-10 text-center"><p class="text-slate-400 font-medium">Kamar tidak ditemukan.</p></div>';
+    var btnMore = document.getElementById('loadMoreBtn');
+    if (btnMore) { if (filteredKamar.length > limitKamar) btnMore.classList.remove('hidden-view'); else btnMore.classList.add('hidden-view'); }
+  }
+
+  function renderTabelAdmin() {
+    if(userRole !== 'admin' || !appData) return;
+    var totalData = appData.kamarList.length;
+    var totalPages = Math.ceil(totalData / adminRowsPerPage) || 1;
+    if (adminCurrentPage > totalPages) adminCurrentPage = totalPages;
+    var startIndex = (adminCurrentPage - 1) * adminRowsPerPage;
+    var endIndex = startIndex + adminRowsPerPage;
+    var paginatedData = appData.kamarList.slice(startIndex, endIndex);
+
+    var aHtml = '';
+    paginatedData.forEach(function(k) {
+      var fasEscaped = k.fasilitas.replace(/'/g, "\\'"); var picEscaped = k.gambar.replace(/'/g, "\\'");
+      aHtml += '<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"><td class="p-6 font-black text-rose-600 dark:text-rose-400">' + k.no + '</td><td class="p-6 font-medium max-w-xs truncate dark:text-slate-300">' + k.fasilitas + '</td><td class="p-6 font-bold font-mono dark:text-slate-200">Rp ' + Number(k.harga).toLocaleString('id-ID') + '</td><td class="p-6 text-center space-x-2 whitespace-nowrap"><button onclick="actionEditKamar(\'' + k.no + '\', \'' + fasEscaped + '\', \'' + k.harga + '\', \'' + picEscaped + '\')" class="text-xs font-bold text-white bg-blue-500 px-4 py-2.5 rounded-xl hover:bg-blue-600 shadow-sm transition-all">✏️ Edit</button><button onclick="actionHapusKamar(\'' + k.no + '\')" class="text-xs font-bold text-white bg-rose-500 px-4 py-2.5 rounded-xl hover:bg-rose-600 shadow-sm transition-all">🗑️ Hapus</button></td></tr>';
+    });
+    var admEl = document.getElementById('tabelAdmin'); if(admEl) admEl.innerHTML = aHtml || '<tr><td colspan="4" class="p-10 text-center text-slate-400">Data kosong.</td></tr>';
+    var infoEl = document.getElementById('adminPageInfo'); if (infoEl) infoEl.innerText = 'Halaman ' + adminCurrentPage + ' dari ' + totalPages;
+    var btnP = document.getElementById('btnPrevAdmin'); if (btnP) btnP.disabled = (adminCurrentPage === 1);
+    var btnN = document.getElementById('btnNextAdmin'); if (btnN) btnN.disabled = (adminCurrentPage === totalPages);
+  }
+function showUrgentList() {
+    var list = appData.dash.urgentList;
+    if (!list || list.length === 0) {
+      Swal.fire({ icon:'success', title:'Semua Aman', text:'Tidak ada penyewa yang jatuh tempo dalam 24 jam.', customClass:{popup:'rounded-[2rem] dark:bg-slate-800 dark:text-white'} });
+      return;
+    }
+
+    var html = '<div class="overflow-x-auto mt-4"><table class="w-full text-left text-sm font-sans">';
+    html += '<thead class="text-slate-400 uppercase font-bold border-b dark:border-slate-700"><tr><th class="p-3">Kamar</th><th class="p-3">Nama</th><th class="p-3">Aksi</th></tr></thead><tbody class="divide-y dark:divide-slate-700">';
+    
+    list.forEach(function(u) {
+      var waHp = String(u.hp).replace(/\D/g, '');
+      if (waHp.startsWith('0')) waHp = '62' + waHp.substring(1); else if (waHp.startsWith('8')) waHp = '62' + waHp;
+      
+      html += '<tr><td class="p-3 font-black text-rose-500">K-' + u.no + '</td><td class="p-3 font-bold dark:text-slate-200">' + u.nama + '</td>';
+      html += '<td class="p-3"><a href="https://wa.me/' + waHp + '" target="_blank" class="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm">Tagih WA</a></td></tr>';
+    });
+    html += '</tbody></table></div>';
+
+    Swal.fire({
+      title: '🚨 Jatuh Tempo < 24 Jam',
+      html: html,
+      showConfirmButton: false,
+      showCloseButton: true,
+      customClass: { popup: 'rounded-[2.5rem] dark:bg-slate-800 p-6 w-full max-w-lg' }
+    });
+  }
+  function changeAdminRows() { adminRowsPerPage = parseInt(document.getElementById('adminRowsPerPage').value); adminCurrentPage = 1; renderTabelAdmin(); }
+  function prevAdminPage() { if (adminCurrentPage > 1) { adminCurrentPage--; renderTabelAdmin(); } }
+  function nextAdminPage() { var totalPages = Math.ceil(appData.kamarList.length / adminRowsPerPage) || 1; if (adminCurrentPage < totalPages) { adminCurrentPage++; renderTabelAdmin(); } }
+  function actionSearchKamar() { searchKamarQuery = document.getElementById('searchKamar').value; limitKamar = 8; renderKamarGallery(); }
+  function actionLoadMore() { limitKamar += 8; renderKamarGallery(); }
+
+  function showFotoBukti(url) {
+    var embedUrl = url.replace(/\/view.*$/, '/preview');
+    Swal.fire({
+      title: 'Bukti Pembayaran',
+      html: '<iframe src="' + embedUrl + '" class="w-full h-[60vh] rounded-2xl border-0 shadow-inner bg-slate-100 dark:bg-slate-900"></iframe>',
+      showCloseButton: true, showConfirmButton: false, width: '600px',
+      customClass: { popup: 'rounded-[2.5rem] dark:bg-slate-800 p-6', htmlContainer: 'm-0 pt-4' }
+    });
+  }
+
+  function showDetailKamar(no) {
+    if (!appData || !appData.kamarList) { Swal.fire({icon:'info', title:'Mohon Tunggu', text:'Data sedang disinkronkan.', timer:2000, showConfirmButton:false, customClass:{popup:'dark:bg-slate-800'}}); return; }
+    var k = appData.kamarList.find(function(x){ return String(x.no) === String(no); }); if (!k) return;
+    
+    var act = '';
+    
+    if (userRole === 'admin') {
+      // Menu untuk Admin
+      if (k.status === 'KOSONG') {
+        act = '<button onclick="Swal.close(); actionIsi(\''+k.no+'\')" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-1 tracking-wide">📝 ISI KAMAR INI</button>';
+      } else {
+        act = '<div class="flex gap-3 mt-6"><button onclick="Swal.close(); actionBayar(\''+k.no+'\','+k.harga+')" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-2xl transition-all shadow-lg hover:shadow-emerald-500/30 hover:-translate-y-1 tracking-wide">💰 BAYAR CASH</button><button onclick="Swal.close(); actionKosongkan(\'' + k.no + '\')" class="flex-1 bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 font-black py-4 rounded-2xl transition-all tracking-wide">🚪 KOSONGKAN</button></div>';
+      }
+    } else {
+      // --- LOGIKA ANTI DOUBLE BOOKING UNTUK PENYEWA ---
+      if (k.status === 'KOSONG') {
+        act = '<button onclick="Swal.close(); actionPesan(\''+k.no+'\', \''+k.harga+'\')" class="w-full mt-6 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-2xl transition-all shadow-lg hover:shadow-emerald-500/30 hover:-translate-y-1 tracking-wide text-lg">✨ PESAN SEKARANG</button>';
+      } else if (k.status === 'PENDING') {
+        // Tombol dimatikan jika ada yang sedang booking (Pending)
+        act = '<button disabled class="w-full mt-6 bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-black py-4 rounded-2xl cursor-not-allowed flex items-center justify-center gap-2">⏳ SEDANG PROSES BOOKING</button><p class="text-[10px] text-center mt-2 text-rose-500 font-bold uppercase tracking-widest">Kamar ini sedang diproses oleh orang lain</p>';
+      } else {
+        // Status TERISI
+        act = '<button onclick="Swal.close(); actionBayarPenyewa(\''+k.no+'\','+k.harga+')" class="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg hover:shadow-blue-500/30 hover:-translate-y-1 tracking-wide">💳 BAYAR TAGIHAN SEKARANG</button>';
+      }
+    }
+
+    var badgeBg = 'bg-emerald-500';
+    var statusLabel = k.status;
+    if (k.status === 'TERISI') badgeBg = 'bg-rose-500';
+    if (k.status === 'PENDING') { badgeBg = 'bg-amber-500'; statusLabel = 'MENUNGGU KONFIRMASI'; }
+
+    var htmlContent = `
+      <div class="text-left font-sans">
+        <div class="relative h-64 -mx-8 -mt-8 mb-6 overflow-hidden bg-slate-200 dark:bg-slate-700 rounded-t-[2.5rem]">
+          <img src="${k.gambar}" class="w-full h-full object-cover">
+          <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/30 to-transparent flex flex-col justify-end p-8">
+            <div class="flex justify-between items-center">
+              <h2 class="text-4xl font-black text-white drop-shadow-md">Kamar ${k.no}</h2>
+              <span class="${badgeBg} text-white font-black px-4 py-1.5 rounded-full text-[10px] uppercase tracking-widest shadow-md">${statusLabel}</span>
+            </div>
+          </div>
+        </div>
+        <div class="px-2 space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-4">
+            <span class="font-bold uppercase text-xs text-slate-400 tracking-wider">Harga Sewa</span>
+            <span class="font-black text-indigo-600 dark:text-indigo-400 text-2xl">Rp ${formatRibuan(k.harga)}<span class="text-sm text-slate-400 font-medium"> /bln</span></span>
+          </div>
+          <div class="pt-2 pb-2">
+            <span class="block font-bold uppercase text-xs text-slate-400 tracking-wider mb-3">Deskripsi & Fasilitas</span>
+            <div class="bg-slate-50 dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-700">
+              <p class="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">${k.fasilitas}</p>
+            </div>
+          </div>
+        </div>
+        ${act}
+      </div>`;
+
+    Swal.fire({ html: htmlContent, showConfirmButton: false, showCloseButton: true, customClass: { popup: 'rounded-[2.5rem] dark:bg-slate-800 border dark:border-slate-700 p-8' } });
+  }
+
+  function processAction(funcName, ...args) {
+    Swal.fire({ title: 'Memproses...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); }, customClass:{popup:'dark:bg-slate-800 dark:text-white'}});
+    google.script.run.withSuccessHandler(function(m) { Swal.fire({icon:'success', title:'Sukses', text: m || 'Selesai', customClass:{popup:'dark:bg-slate-800 dark:text-white'}}); loadDataServer(false); }).withFailureHandler(function(e) { Swal.fire({icon:'error', title:'Gagal', text: e.message, customClass:{popup:'dark:bg-slate-800 dark:text-white'}}); })[funcName](...args);
+  }
+
+  function actionApprove(row, noKamar) { processAction('prosesPersetujuanDb', row, true, noKamar); }
+  function actionReject(row, noKamar) { processAction('prosesPersetujuanDb', row, false, noKamar); }
+  function actionKosongkan(no) { Swal.fire({title:'Batalkan/Kosongkan?', icon:'warning', showCancelButton:true, customClass:{popup:'dark:bg-slate-800'}}).then(r => { if(r.isConfirmed) processAction('updateStatusKamar', no, 'KOSONG', '', '', ''); }); }
+  function actionHapusKamar(no) { Swal.fire({title:'Hapus Kamar?', icon:'warning', showCancelButton:true, customClass:{popup:'dark:bg-slate-800'}}).then(r => { if(r.isConfirmed) processAction('kelolaKamarDb', 'hapus', no, '', ''); }); }
+  
+  function actionBayar(no, harga) { 
+    Swal.fire({ 
+      title:'Bayar Cash', 
+      html: '<input id="sw-nom" type="text" class="swal2-input dark:bg-slate-900 dark:border-slate-700 dark:text-white" value="'+formatRibuan(harga)+'" oninput="this.value=formatRibuan(this.value)"><input id="sw-ket" class="swal2-input dark:bg-slate-900 dark:border-slate-700 dark:text-white" placeholder="Keterangan" oninput="this.value=this.value.toUpperCase()">',
+      icon:'info', showCancelButton:true, customClass:{popup:'dark:bg-slate-800'},
+      preConfirm: function() { return { nom: document.getElementById('sw-nom').value.replace(/\./g, ''), ket: document.getElementById('sw-ket').value }; }
+    }).then(function(r){ 
+      if(r.isConfirmed) processAction('catatTransaksi', no, r.value.nom, r.value.ket || 'PEMBAYARAN CASH ADMIN'); 
+    }); 
+  }
+
+  // --- PERUBAHAN: INPUT NAMA + NO HP + PEKERJAAN ---
+  function actionPesan(no, harga) {
+    Swal.fire({
+      title: 'Sewa Kamar ' + no, 
+      html: '<div class="space-y-3"><input id="sw-nama" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white" placeholder="Nama Lengkap" oninput="this.value=this.value.toUpperCase()"><input id="sw-hp" type="number" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white" placeholder="Nomor WhatsApp (Cth: 08123...)"><select id="sw-job" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white"><option value="MAHASISWA">Mahasiswa</option><option value="PEKERJA">Pekerja</option></select></div>', 
+      showCancelButton: true, confirmButtonColor: '#10b981', customClass:{popup:'rounded-[2rem] dark:bg-slate-800'}, 
+      preConfirm: function() { 
+        let n = document.getElementById('sw-nama').value;
+        let hp = document.getElementById('sw-hp').value;
+        if (!n || !hp) { Swal.showValidationMessage('Nama dan Nomor HP Wajib Diisi!'); return false; }
+        return { n: n, hp: hp, j: document.getElementById('sw-job').value }; 
+      }
+    }).then(function(res) {
+      if (res.isConfirmed && res.value.n) {
+        Swal.fire({ title: 'Menyiapkan Kamar...', didOpen: () => Swal.showLoading(), customClass:{popup:'dark:bg-slate-800'} });
+        google.script.run.withSuccessHandler(function() {
+          // Buka opsi bayar, kirim data hp ke fungsi selanjutya
+          actionBayarPenyewa(no, harga, true, res.value.n.toUpperCase(), res.value.hp, res.value.j);
+        }).pesanKamar(no, res.value.n.toUpperCase(), res.value.hp, res.value.j);
+      }
+    });
+  }
+
+  function actionIsi(no) {
+    Swal.fire({
+      title: 'Isi Kamar ' + no, 
+      html: '<div class="space-y-3"><input id="sw-n" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white" placeholder="Nama" oninput="this.value=this.value.toUpperCase()"><input id="sw-h" type="number" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white" placeholder="No HP / WhatsApp"><select id="sw-j" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white"><option value="MAHASISWA">Mahasiswa</option><option value="PEKERJA">Pekerja</option></select></div>', 
+      showCancelButton: true, confirmButtonColor: '#4f46e5', customClass:{popup:'rounded-[2rem] dark:bg-slate-800'}, 
+      preConfirm: function() { return { n: document.getElementById('sw-n').value, hp: document.getElementById('sw-h').value, j: document.getElementById('sw-j').value }; }
+    }).then(function(res) { 
+      if (res.isConfirmed && res.value.n) processAction('updateStatusKamar', no, 'TERISI', res.value.n, res.value.hp, res.value.j); 
+    });
+  }
+
+  function actionBayarPenyewa(no, harga, isBookingBaru = false, nama = "", hp = "", job = "") {
+    var popTitle = isBookingBaru ? 'Berhasil Booking!' : 'Pilih Metode Pembayaran';
+    var popText = isBookingBaru ? 'Kamar diamankan (PENDING). Selesaikan pembayaran agar menjadi TERISI.' : 'Kamar ' + no;
+
+    Swal.fire({
+      title: popTitle, text: popText,
+      showCancelButton: true, showDenyButton: true,
+      confirmButtonText: '💳 Transfer Bank', denyButtonText: '💵 Uang Tunai (Cash)', cancelButtonText: 'Nanti Saja',
+      confirmButtonColor: '#3b82f6', denyButtonColor: '#10b981', allowOutsideClick: false,
+      customClass: { popup: 'rounded-[2rem] dark:bg-slate-800 dark:text-white', actions: 'flex-col gap-2 w-full px-6' }
+    }).then((result) => {
+      if (result.isConfirmed) actionBayarTransferPenyewa(no, harga, isBookingBaru, nama, hp, job);
+      else if (result.isDenied) actionBayarCashPenyewa(no, harga, isBookingBaru, nama, hp, job);
+      else { if (isBookingBaru) loadDataServer(false); }
+    });
+  }
+
+  async function actionBayarTransferPenyewa(no, harga, isBookingBaru, nama, hp, job) {
+    const { value: formValues } = await Swal.fire({
+      title: 'Upload Bukti Transfer',
+      html: '<div class="text-left"><p class="text-sm text-slate-500 mb-4">Total: <span class="font-bold text-indigo-500">Rp '+formatRibuan(harga)+'</span></p><input id="sw-ket" class="w-full px-4 py-3 mb-4 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white" placeholder="Keterangan (Mis: BULAN MARET)" oninput="this.value=this.value.toUpperCase()"><label class="block text-sm font-bold text-slate-500 mb-2">Upload File / Foto</label><input type="file" id="sw-file" class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept="image/*"></div>',
+      showCancelButton: true, confirmButtonColor: '#3b82f6', confirmButtonText: 'Kirim Bukti', customClass: { popup: 'rounded-[2rem] dark:bg-slate-800 p-6' },
+      preConfirm: () => { 
+        let fi = document.getElementById('sw-file'); 
+        if(fi.files.length === 0) { Swal.showValidationMessage('Pilih foto bukti!'); return false; } 
+        return [ harga, document.getElementById('sw-ket').value, fi.files[0] ];
+      }
+    });
+    if (formValues) {
+      Swal.fire({ title: 'Mengunggah...', didOpen: () => Swal.showLoading(), customClass:{popup:'dark:bg-slate-800'} });
+      let file = formValues[2]; var reader = new FileReader();
+      reader.onload = function(e) {
+        google.script.run.withSuccessHandler(function(m){ Swal.fire({icon:'success', title:'Sukses', text:m, customClass:{popup:'dark:bg-slate-800'}}); loadDataServer(false); }).withFailureHandler(function(err){ Swal.fire({icon:'error', title:'Error', text:err.message, customClass:{popup:'dark:bg-slate-800'}}); })
+        .uploadPaymentProof(file.name, e.target.result, no, formValues[0], formValues[1] || 'TRANSFER VIA WEB', isBookingBaru, nama, hp, job);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      if (isBookingBaru) loadDataServer(false);
+    }
+  }
+
+  async function actionBayarCashPenyewa(no, harga, isBookingBaru, nama, hp, job) {
+    const { value: formValues } = await Swal.fire({
+      title: 'Bayar Tunai (Cash)',
+      html: '<div class="text-left"><p class="text-sm text-slate-500 mb-4">Total tagihan: <span class="font-bold text-emerald-500">Rp '+formatRibuan(harga)+'</span></p><p class="text-xs text-amber-600 dark:text-amber-400 mb-4 font-bold bg-amber-50 dark:bg-amber-900/30 p-3 rounded-lg border border-amber-200 dark:border-amber-700/50">Pastikan Anda telah menitipkan uang tunai kepada Admin secara langsung.</p><input id="sw-ket" class="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-xl" placeholder="Keterangan (Mis: TITIP KE IBU KOS)" oninput="this.value=this.value.toUpperCase()"></div>',
+      showCancelButton: true, confirmButtonColor: '#10b981', confirmButtonText: 'Ajukan Pembayaran', customClass: { popup: 'rounded-[2rem] dark:bg-slate-800 p-6' },
+      preConfirm: () => { return [ harga, document.getElementById('sw-ket').value ]; }
+    });
+    if (formValues) {
+      Swal.fire({ title: 'Memproses...', didOpen: () => Swal.showLoading(), customClass:{popup:'dark:bg-slate-800'} });
+      google.script.run.withSuccessHandler(function(m){ Swal.fire({icon:'success', title:'Sukses', text:m, customClass:{popup:'dark:bg-slate-800'}}); loadDataServer(false); }).withFailureHandler(function(err){ Swal.fire({icon:'error', title:'Gagal', text:err.message, customClass:{popup:'dark:bg-slate-800'}}); })
+      .ajukanBayarCashPenyewa(no, formValues[0], formValues[1] || 'BAYAR CASH LANGSUNG', isBookingBaru, nama, hp, job);
+    } else {
+      if (isBookingBaru) loadDataServer(false);
+    }
+  }
+
+  function actionEditKamar(no, fas, hrg, pic) {
+    Swal.fire({
+      title: 'Edit Kamar ' + no, 
+      html: '<div class="space-y-3"><input id="e-f" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white" value="'+fas+'" oninput="this.value=this.value.toUpperCase()"><input id="e-h" type="text" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white" value="'+formatRibuan(hrg)+'" oninput="this.value=formatRibuan(this.value)"><input id="e-p" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white" value="'+pic+'"></div>', 
+      showCancelButton: true, confirmButtonColor: '#3b82f6', customClass:{popup:'rounded-[2rem] dark:bg-slate-800'}, 
+      preConfirm: function() { return [ document.getElementById('e-f').value, document.getElementById('e-h').value.replace(/\./g, ''), document.getElementById('e-p').value ]; }
+    }).then(function(res) { if(res.isConfirmed) processAction('kelolaKamarDb', 'edit', no, res.value[0], res.value[1], res.value[2]); });
+  }
+
+  function actionTambahKamar() {
+    Swal.fire({
+      title: 'Tambah Kamar', 
+      html: '<div class="space-y-3"><input id="a-f" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white" placeholder="Fasilitas" oninput="this.value=this.value.toUpperCase()"><input id="a-h" type="text" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white" placeholder="Harga" oninput="this.value=formatRibuan(this.value)"><input id="a-p" class="w-full px-4 py-3 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white" placeholder="Link Gambar"></div>', 
+      showCancelButton: true, confirmButtonColor: '#e11d48', customClass:{popup:'rounded-[2rem] dark:bg-slate-800'}, 
+      preConfirm: function() { return [ document.getElementById('a-f').value, document.getElementById('a-h').value.replace(/\./g, ''), document.getElementById('a-p').value ]; }
+    }).then(function(res) { if(res.isConfirmed && res.value[0] && res.value[1]) processAction('kelolaKamarDb', 'tambah', 'AUTO', res.value[0], res.value[1], res.value[2]); });
+  }
+
+  function toggleTheme() { document.documentElement.classList.toggle('dark'); localStorage.setItem('kosTheme', document.documentElement.classList.contains('dark') ? 'dark' : 'light'); updateThemeIcons(); renderUI(); }
+  function updateThemeIcons() { var isDark = document.documentElement.classList.contains('dark'); var icon = isDark ? '☀️' : '🌙'; if(document.getElementById('theme-icon')) document.getElementById('theme-icon').innerText = icon; if(document.getElementById('theme-icon-auth')) document.getElementById('theme-icon-auth').innerText = icon; }
+
+  window.addEventListener('DOMContentLoaded', function() { console.log('Sistem Realtime Siap'); updateThemeIcons(); });
+</script>

@@ -1,0 +1,48 @@
+<div class="max-w-5xl mx-auto space-y-6">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 bg-white/50 dark:bg-slate-800/50 backdrop-blur-md p-6 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm">
+    <div>
+      <h2 class="text-3xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-400 drop-shadow-sm">Panel Admin</h2>
+      <p class="text-slate-500 dark:text-slate-400 font-medium mt-1 text-sm">Kelola master data kamar Anda di sini.</p>
+    </div>
+    <button onclick="actionTambahKamar()" class="bg-gradient-to-r from-rose-500 to-pink-600 text-white px-8 py-3.5 rounded-2xl shadow-lg shadow-rose-500/30 hover:shadow-xl hover:shadow-rose-500/40 hover:-translate-y-1 transition-all font-bold text-sm flex items-center gap-3">
+      <span class="text-lg">➕</span> Tambah Kamar
+    </button>
+  </div>
+
+  <div class="bg-white dark:bg-slate-800 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden transition-colors">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left">
+        <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs uppercase text-slate-400 font-bold border-b border-slate-100 dark:border-slate-700 tracking-wider">
+          <tr><th class="p-6">No Kamar</th><th class="p-6">Fasilitas</th><th class="p-6">Harga (Rp)</th><th class="p-6 text-center">Aksi</th></tr>
+        </thead>
+        <tbody id="tabelAdmin" class="divide-y divide-slate-50 dark:divide-slate-700/50 text-sm"></tbody>
+      </table>
+    </div>
+
+    <div class="flex flex-col md:flex-row items-center justify-between p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+      
+      <div class="flex items-center gap-3 mb-4 md:mb-0 text-sm text-slate-500 dark:text-slate-400 font-medium">
+        <span>Tampilkan:</span>
+        <select id="adminRowsPerPage" onchange="changeAdminRows()" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer transition-colors dark:text-white">
+          <option value="10">10</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <span>data</span>
+      </div>
+
+      <div class="flex items-center gap-5 text-sm">
+        <span id="adminPageInfo" class="text-slate-500 dark:text-slate-400 font-bold">Halaman 1 dari 1</span>
+        <div class="flex gap-2">
+          <button onclick="prevAdminPage()" id="btnPrevAdmin" class="px-5 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300">
+            Sebelumnya
+          </button>
+          <button onclick="nextAdminPage()" id="btnNextAdmin" class="px-5 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300">
+            Selanjutnya
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

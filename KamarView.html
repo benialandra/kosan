@@ -1,0 +1,24 @@
+<div class="max-w-7xl mx-auto space-y-6">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 bg-white/50 dark:bg-slate-800/50 backdrop-blur-md p-6 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-sm">
+    <div class="flex-1 w-full md:w-auto">
+      <h2 class="text-3xl font-black uppercase tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-emerald-500">Galeri Kamar</h2>
+      
+      <div class="mt-4 relative max-w-md">
+        <input type="text" id="searchKamar" onkeyup="actionSearchKamar()" placeholder="Cari fasilitas, harga, nomor..." class="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white">
+        <span class="absolute left-4 top-3.5 text-slate-400">🔍</span>
+      </div>
+    </div>
+    
+    <button onclick="loadDataServer(false)" class="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-6 py-3.5 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all font-bold text-sm flex items-center gap-3 text-slate-700 dark:text-slate-200 whitespace-nowrap">
+      <span class="text-lg">🔄</span> Reload
+    </button>
+  </div>
+
+  <div id="kamarGallery" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"></div>
+  
+  <div id="loadMoreBtn" class="text-center mt-10 hidden-view">
+    <button onclick="actionLoadMore()" class="bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-8 py-3 rounded-full font-bold transition-all shadow-sm">
+      ⬇️ Tampilkan Lebih Banyak
+    </button>
+  </div>
+</div>
