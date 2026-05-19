@@ -18,7 +18,7 @@ To get a local copy up and running, follow these simple steps.
 
 *   Node.js and npm (or yarn) installed.
 *   `clasp` (Command Line Apps Script Project) installed globally:
-    ```bash
+    ```bashz
     npm install -g @google/clasp
     ```
 *   A Google Cloud Project with the Google Apps Script API enabled.
